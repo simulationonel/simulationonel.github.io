@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enter the Woods</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;font-family:'Press Start 2P',monospace;background:#0a1a0a}
+  canvas{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges}
+  #overlay{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10}
+  #password-bubble{position:absolute;bottom:33%;left:48%;pointer-events:all;animation:bf 3s ease-in-out infinite}
+  @keyframes bf{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+  .bubble-container{position:relative;background:#f0ead6;border:3px solid #2a1f10;border-radius:12px;padding:14px 18px;min-width:260px;box-shadow:4px 4px 0px rgba(0,0,0,0.3)}
+  .bubble-container::after{content:'';position:absolute;bottom:-12px;left:4px;border-left:8px solid transparent;border-right:8px solid transparent;border-top:12px solid #2a1f10}
+  .bubble-container::before{content:'';position:absolute;bottom:-9px;left:7px;border-left:5px solid transparent;border-right:5px solid transparent;border-top:9px solid #f0ead6;z-index:2}
+  .bubble-text{font-size:14px;color:#2a1f10;text-align:center;margin-bottom:10px;line-height:1.8}
+  .password-row{display:flex;gap:6px;align-items:center}
+  .password-input{flex:1;font-family:'Press Start 2P',monospace;font-size:14px;padding:8px 10px;border:2px solid #2a1f10;border-radius:4px;background:#fff;color:#2a1f10;outline:none;image-rendering:auto}
+  .password-input::placeholder{color:#b5a888;font-size:11px}
+  .password-input:focus{border-color:#3a7a30;box-shadow:0 0 0 2px rgba(58,122,48,0.3)}
+  .submit-btn{font-family:'Press Start 2P',monospace;font-size:14px;padding:8px 14px;border:2px solid #2a1f10;border-radius:4px;background:#3a7a30;color:#fff;cursor:pointer;text-shadow:1px 1px 0 rgba(0,0,0,0.3)}
+  .submit-btn:hover{background:#2e6426;transform:translate(1px,1px)}
+  .error-msg{font-size:10px;color:#c44;text-align:center;margin-top:8px;min-height:14px}
+  .error-msg.shake{animation:sh .3s ease}
+  @keyframes sh{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+  #success-screen{position:fixed;top:0;left:0;width:100%;height:100%;background:#0e1e0e;display:none;align-items:center;justify-content:center;z-index:100;flex-direction:column}
+  #success-screen.show{display:flex;animation:fi 1.2s ease}
+  @keyframes fi{from{opacity:0}to{opacity:1}}
+  .success-text{font-size:16px;color:#5ea84e;text-align:center;line-height:2.2;animation:sp 2s ease-in-out infinite}
+  @keyframes sp{0%,100%{opacity:1}50%{opacity:.6}}
+  #scanlines{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.03) 3px,rgba(0,0,0,.03) 6px)}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="scanlines"></div>
+<div id="overlay">
+  <div id="password-bubble">
+    <div class="bubble-container">
+      <div class="bubble-text">Hello! What is the<br>password to cross<br>the bridge?</div>
+      <div class="password-row">
+        <input type="password" class="password-input" id="passInput" placeholder="· · · · ·" autocomplete="off" autofocus>
+        <button class="submit-btn" id="submitBtn">→</button>
+      </div>
+      <div class="error-msg" id="errorMsg"></div>
+    </div>
+  </div>
+</div>
+<div id="success-screen"><div class="success-text">You may cross the bridge!<br><br>Welcome!</div></div>
+<script>
+const C=document.getElementById('scene'),X=C.getContext('2d'),P=3;
+let W,H,cW,cH;
+function resize(){W=C.width=innerWidth;H=C.height=innerHeight;cW=Math.ceil(W/P);cH=Math.ceil(H/P)}
+resize();addEventListener('resize',resize);
+function px(x,y,w,h,r,g,b,a){X.fillStyle=a!=null?`rgba(${r},${g},${b},${a})`:`rgb(${r},${g},${b})`;X.fillRect(Math.floor(x)*P,Math.floor(y)*P,Math.ceil(w)*P,Math.ceil(h)*P)}
+let t=0;
+function sr(s){return()=>{s=(s*16807)%2147483647;return(s-1)/2147483646}}
+const RIVER_TOP=.36,RIVER_BOT=.56,BRIDGE_FAR=.36,BRIDGE_NEAR=.68,VPX=()=>cW*.46;
+function onBridge(gx,gy){if(gy<cH*BRIDGE_FAR||gy>cH*BRIDGE_NEAR)return false;const p=(gy-cH*BRIDGE_FAR)/(cH*BRIDGE_NEAR-cH*BRIDGE_FAR);return Math.abs(gx-(VPX()+(cW*.48-VPX())*p*.12))<(3+p*cW*.16)+1}
+
+// === TIME-OF-DAY SKY COLORS ===
+const hour=new Date().getHours();
+// Sky palette: [top_r,top_g,top_b, bot_r,bot_g,bot_b]
+function getSkyColors(){
+  if(hour>=6&&hour<8) return{tr:40,tg:30,tb:50, br:180,bg:100,bb:60}; // sunrise
+  if(hour>=8&&hour<11) return{tr:30,tg:60,tb:110, br:80,bg:130,bb:170}; // morning
+  if(hour>=11&&hour<15) return{tr:25,tg:70,tb:140, br:70,bg:140,bb:190}; // midday
+  if(hour>=15&&hour<18) return{tr:40,tg:60,tb:110, br:120,bg:110,bb:80}; // afternoon
+  if(hour>=18&&hour<20) return{tr:60,tg:30,tb:40, br:170,bg:80,bb:50}; // sunset
+  if(hour>=20&&hour<22) return{tr:12,tg:14,tb:40, br:25,bg:25,bb:50}; // dusk
+  return{tr:6,tg:10,tb:28, br:14,bg:20,bb:38}; // night (22-6)
+}
+const sky=getSkyColors();
+
+function drawSky(){for(let y=0;y<cH*.22;y++){const p=y/(cH*.22);for(let x=0;x<cW;x++)px(x,y,1,1,sky.tr+(sky.br-sky.tr)*p|0,sky.tg+(sky.bg-sky.tg)*p|0,sky.tb+(sky.bb-sky.tb)*p|0)}}
+
+// === HAWK circling in sky ===
+function drawHawk(){
+  // Slow lazy circle
+  const cx=cW*.5+Math.sin(t*.1)*cW*.28;
+  const cy=cH*.05+Math.sin(t*.14+1)*cH*.025;
+  // Gentle soaring wing flap (mostly gliding)
+  const glide=Math.sin(t*.6);
+  const wingUp=glide>0?glide*.6:glide*.2; // mostly flat, slight dip
+  const bank=Math.cos(t*.1)*.25;
+  const c=24; // dark silhouette color
+  // Body (3px long)
+  px(cx-1|0,cy|0,3,1,c,c-4,c-8);
+  // Head
+  px(cx+2|0,cy|0,1,1,c+4,c,c-6);
+  // Wings — simple V shape, 6px each side
+  for(let w=1;w<=6;w++){
+    const lift=wingUp*w*.25+bank*w*.2;
+    px(cx-1-w|0,cy-lift|0,1,1,c-2,c-6,c-10);
+    px(cx+1+w|0,cy+lift*.7|0,1,1,c-2,c-6,c-10);
+  }
+  // Tail fork
+  px(cx-2|0,cy+1|0,1,1,c-4,c-8,c-12);
+  px(cx-3|0,cy+1|0,1,1,c-4,c-8,c-12);
+}
+function drawDistantTrees(){
+  const dayBoost=(hour>=8&&hour<18)?1.5:1;
+  const blendStartY=cH*.17;
+  const blendEndY=cH*.27;
+  for(let y=cH*.08|0;y<cH*.30|0;y++)for(let x=0;x<cW;x++){
+    const topEdge=cH*.08+Math.abs(Math.sin(x*.025+.5))*cH*.04+Math.abs(Math.sin(x*.07+1.5))*cH*.025+Math.abs(Math.sin(x*.13+3))*cH*.012+Math.abs(Math.sin(x*.2+5))*cH*.006;
+    if(y>=topEdge){
+      const d=(y-topEdge)/(cH*.20);
+      // Blend factor based on absolute Y
+      const blend=y<blendStartY?0:y>blendEndY?1:(y-blendStartY)/(blendEndY-blendStartY);
+      // Texture noise — fades out as we approach the field to avoid noisy seam
+      const n1=((Math.sin(x*.09+y*.07)*43758.5453)%1+1)%1;
+      const n2=((Math.sin(x*.15-y*.11+1.3)*28461.3)%1+1)%1;
+      const n3=Math.sin(x*.05+y*.04)*.5+.5;
+      const tex=(n1*.4+n2*.3+n3*.3)*(1-blend); // texture fades as we blend
+      const b=(.28+d*.10+tex*.12)*dayBoost;
+      const gray=22*b;
+      const skyAmt=.65*(1-d*.55);
+      const mr=gray+sky.br*skyAmt*.38*dayBoost;
+      const mg=gray+sky.bg*skyAmt*.38*dayBoost;
+      const mb=gray+sky.bb*skyAmt*.38*dayBoost;
+      // Field color at this y position — uses same hash noise as far field
+      const fp=Math.max(0,(y-cH*.20)/(cH*(RIVER_TOP-.20)));
+      const fn1=((Math.sin(x*.037+y*.029)*43758.5453)%1+1)%1;
+      const fn2=((Math.sin(x*.071-y*.043+2.7)*28461.3)%1+1)%1;
+      const fn=fn1*.5+fn2*.5;
+      const fb2=(.25+fp*.3+fn*.05)*dayBoost;
+      const fg2=34+fp*16+fn*12;
+      const fr2=fg2*.22*fb2, ffg2=fg2*fb2, fb3=fg2*.16*fb2;
+      const r=mr*(1-blend)+fr2*blend;
+      const g=mg*(1-blend)+ffg2*blend;
+      const bl=mb*(1-blend)+fb3*blend;
+      px(x,y,1,1,Math.min(255,r)|0,Math.min(255,g)|0,Math.min(255,bl)|0)}}
+}
+function drawFarField(){
+  const dayBoost=(hour>=8&&hour<18)?1.5:1;
+  const mtB=.40*dayBoost;
+  const mtGray=22*mtB;
+  const mtR=mtGray+sky.br*.65*.38*dayBoost*.45, mtG=mtGray+sky.bg*.65*.38*dayBoost*.45, mtBl=mtGray+sky.bb*.65*.38*dayBoost*.45;
+  for(let y=cH*.20|0;y<cH*RIVER_TOP|0;y++){
+    const p=(y-cH*.20)/(cH*(RIVER_TOP-.20));
+    for(let x=0;x<cW;x++){
+      const n1=((Math.sin(x*.037+y*.029)*43758.5453)%1+1)%1;
+      const n2=((Math.sin(x*.071-y*.043+2.7)*28461.3)%1+1)%1;
+      const n=n1*.5+n2*.5;
+      const b=(.25+p*.3+n*.05)*dayBoost;
+      let g=34+p*16+n*12|0;
+      const fr=g*.22*b, fg=g*b, fb=g*.16*b;
+      const blend=Math.min(1,p*2.5);
+      const r=mtR*(1-blend)+fr*blend;
+      const gc=mtG*(1-blend)+fg*blend;
+      const bl=mtBl*(1-blend)+fb*blend;
+      px(x,y,1,1,Math.min(255,r)|0,Math.min(255,gc)|0,Math.min(255,bl)|0)}}
+  const R=sr(333);for(let i=0;i<150;i++){const gx=R()*cW|0,gy=cH*.27+R()*(cH*RIVER_TOP-cH*.27-2)|0;const sw=Math.sin(t*.35+i*.5)*.2;px(gx+sw,gy,1,1,9,32,7);px(gx+sw,gy-1,1,1,11,38,9)}}
+function drawFarBankTrees(){const bb=cH*RIVER_TOP|0,sway=Math.sin(t*.3)*.3;
+  // Pre-scattered positions to avoid diagonal patterns
+  const trees=[
+    {xp:.04,h:1.2,l:-.8},{xp:.11,h:.9,l:.5},{xp:.18,h:1.4,l:-.3},{xp:.24,h:.7,l:1.2},
+    {xp:.31,h:1.1,l:-.6},{xp:.38,h:1.5,l:.4},{xp:.44,h:.8,l:-.9},{xp:.52,h:1.3,l:.7},
+    {xp:.58,h:.9,l:-1.1},{xp:.65,h:1.4,l:.3},{xp:.72,h:1.0,l:-.5},{xp:.78,h:1.2,l:.9},
+    {xp:.85,h:.8,l:-.4},{xp:.91,h:1.3,l:.6},{xp:.96,h:1.0,l:-.7},{xp:.15,h:.6,l:.8}
+  ];
+  trees.forEach((tr,i)=>{
+    const tx=cW*tr.xp,base=bb-2;
+    const trH=(8+tr.h*10)|0,trW=1;
+    const lean=tr.l*1.5;
+    for(let dy=0;dy<trH;dy++){const lO=lean*dy/trH|0;px(tx+lO,base-dy,trW,1,36,24,12)}
+    const top=base-trH;
+    const numBr=3+(i%3)|0;
+    const R2=sr(137+i*43);
+    for(let b=0;b<numBr;b++){
+      const p=b/(numBr-1);
+      const by=top+p*trH*.7;
+      const lO=lean*(trH-(base-by))/trH|0;
+      const side=(b%2===0?1:-1)*(R2()>.3?1:-1);
+      const brLen=3+R2()*6|0;
+      const bx=tx+lO+side*brLen,bby=by-1-R2()*3|0;
+      const st=Math.sqrt((bx-tx-lO)**2+(bby-by)**2)|0;
+      for(let s=0;s<=st;s++){const pp=s/Math.max(1,st);px(tx+lO+(bx-tx-lO)*pp|0,by+(bby-by)*pp|0,1,1,36,24,12)}
+      const rad=3+R2()*5|0;
+      const R3=sr(200+i*31+b*17);
+      for(let j=0;j<rad*rad*2.5|0;j++){
+        const a=R3()*Math.PI*2,d=Math.sqrt(R3())*rad;
+        const lx=bx+Math.cos(a)*d+sway,ly=bby+Math.sin(a)*d*.7;
+        if(d/rad>.6&&R3()>.4)continue;
+        const n=Math.sin(lx*.3+ly*.2+i)*.5+.5;
+        let g=24+n*20|0;
+        px(lx|0,ly|0,1,1,g*.2|0,g*.55|0,g*.15|0);
+      }
+    }
+    // Crown — multiple overlapping clusters for fullness
+    const cRad=4+tr.h*4|0;
+    const R4=sr(300+i*53);
+    for(let c=0;c<2;c++){
+      const ox=(R4()-.5)*cRad*.8, oy=R4()*cRad*.3;
+      for(let j=0;j<cRad*cRad*2.5|0;j++){
+        const a=R4()*Math.PI*2,d=Math.sqrt(R4())*cRad;
+        const lx=tx+lean+ox+Math.cos(a)*d+sway,ly=top-1+oy+Math.sin(a)*d*.7;
+        if(d/cRad>.6&&R4()>.4)continue;
+        const n=Math.sin(lx*.3+ly*.2+i*3+c)*.5+.5;
+        let g=24+n*20|0;
+        px(lx|0,ly|0,1,1,g*.2|0,g*.55|0,g*.15|0);
+      }
+    }
+  });
+}
+
+// === RIVER (flows left to right) ===
+function drawRiver(){const rT=cH*RIVER_TOP|0,rB=cH*RIVER_BOT|0;for(let x=0;x<cW;x++){px(x,rT-1,1,2,50,40,26);px(x,rB,1,2,50,40,26)}for(let y=rT;y<rB;y++){const n=(y-rT)/(rB-rT);for(let x=0;x<cW;x++){
+  // Base dark water
+  let r=12,g=36,b=60;
+  // Small wave crests — thin horizontal bands that scroll right
+  // Each row of waves is offset so they tile naturally
+  const row=((y-rT)*1.3)|0;
+  const wavePhase=(x-t*16+row*7)*.09;
+  const crest=Math.sin(wavePhase);
+  // Only bright at the peak of each small wave
+  if(crest>.6){const intensity=(crest-.6)/.4;r=12+intensity*35|0;g=36+intensity*55|0;b=60+intensity*60|0}
+  else if(crest>.2){r=16;g=42;b=70}
+  // Secondary smaller ripples offset
+  const rip=Math.sin((x-t*20+row*13)*.15);
+  if(rip>.7){r=Math.min(255,r+12);g=Math.min(255,g+18);b=Math.min(255,b+16)}
+  if(n<.04||n>.96){r=r*.5|0;g=g*.5|0;b=b*.5|0}
+  px(x,y,1,1,r,g,b)}}}
+
+// === BRIDGE ===
+function drawBridge(){const farY=cH*BRIDGE_FAR|0,nearY=cH*BRIDGE_NEAR|0,vpx=VPX();for(let y=farY;y<=nearY;y++){const p=(y-farY)/(nearY-farY),halfW=3+p*cW*.16,cx=vpx+(cW*.48-vpx)*p*.12;for(let x=cx-halfW|0;x<=cx+halfW|0;x++){if(x<0||x>=cW)continue;const ac=Math.abs(x-cx)/halfW;if(ac>.94)px(x,y,1,1,48,35,18);else if(ac>.87)px(x,y,1,1,62,46,25);else if(y%Math.max(2,5-p*3|0)===0)px(x,y,1,1,70,52,28);else{const pv=Math.sin(x*.25+y*.12)*.5+.5;px(x,y,1,1,pv>.5?115:102,pv>.5?85:75,pv>.5?52:44)}}}for(let i=0;i<10;i++){const p=i/9,y=farY+p*(nearY-farY)|0,halfW=3+p*cW*.16,cx=vpx+(cW*.48-vpx)*p*.12,postH=2+p*14|0,postW=1+p*2|0;[-1,1].forEach(s=>{const postX=cx+halfW*.94*s|0;for(let ph=0;ph<postH;ph++)px(postX,y-ph,postW,1,44,32,16);px(postX-1,y-postH,postW+2,(1+p)|0,52,38,20)})}[-1,1].forEach(s=>{for(let y=farY;y<=nearY;y++){const p=(y-farY)/(nearY-farY),halfW=3+p*cW*.16,cx=vpx+(cW*.48-vpx)*p*.12,postX=cx+halfW*.94*s|0,sp=Math.max(4,14-p*10|0),lp=((y-farY)%sp)/sp,sag=Math.sin(lp*Math.PI)*(1+p*3.5)|0;px(postX,y-(1+p*10|0)+sag,1,1,138,118,78)}})}
+
+// === NEAR GROUND ===
+function drawNearGround(){const top=cH*RIVER_BOT|0;const R=sr(55);const dayBoost=(hour>=8&&hour<18)?1.35:1;for(let y=top;y<cH;y++){const d=(y-top)/(cH-top);for(let x=0;x<cW;x++){const n1=((Math.sin(x*.037+y*.029)*43758.5453)%1+1)%1;const n2=((Math.sin(x*.071-y*.043+2.7)*28461.3)%1+1)%1;const v=n1*.5+n2*.5;const b=(.35+d*.65)*dayBoost;let g;if(v<.18)g=30;else if(v<.38)g=36;else if(v<.58)g=44;else if(v<.78)g=52;else g=58;px(x,y,1,1,Math.min(255,g*.24*b)|0,Math.min(255,g*b)|0,Math.min(255,g*.14*b)|0)}}}
+
+// === GRASS (skip bridge) ===
+function drawGrass(){const nearTop=cH*RIVER_BOT|0;const R=sr(777);const dayBoost=(hour>=8&&hour<18)?1.3:1;for(let i=0;i<600;i++){const gx=R()*cW|0,gy=nearTop+2+R()*(cH-nearTop-4)|0;if(onBridge(gx,gy))continue;const d=(gy-nearTop)/(cH-nearTop),b=(.36+d*.64)*dayBoost;const lean=(Math.sin(i*1.7+t*.5)*.8+(i%3-.5)*.4);const bladeH=1+d*2.5|0;const gVar=48+((i*7)%35);for(let dy=0;dy<bladeH;dy++){const g=Math.min(255,(gVar+dy*6)*b)|0;const xOff=lean*dy/Math.max(1,bladeH);px(gx+xOff|0,gy-dy,1,1,Math.min(255,g*.26)|0,g,Math.min(255,g*.14)|0)}}}
+
+// === LEAF/BRANCH ===
+function drawLeafCluster(cx,cy,radius,seed,sway){const R2=sr(seed);const count=radius*radius*3.2|0;for(let i=0;i<count;i++){const angle=R2()*Math.PI*2,dist=Math.sqrt(R2())*radius,lx=cx+Math.cos(angle)*dist+sway,ly=cy+Math.sin(angle)*dist*.75;if(dist/radius>.62&&R2()>.42)continue;const n=Math.sin(lx*.12+ly*.1+seed)*.5+.5;let g;if(n<.3)g=26;else if(n<.55)g=36;else if(n<.8)g=48;else g=56;if(Math.sin(angle)>.3)g=g*.78|0;px(lx|0,ly|0,1,1,g*.22|0,g,g*.16|0)}}
+function drawBranch(x1,y1,x2,y2,w){const steps=Math.sqrt((x2-x1)**2+(y2-y1)**2)|0;for(let s=0;s<=steps;s++){const p=s/Math.max(1,steps);px(x1+(x2-x1)*p|0,y1+(y2-y1)*p+Math.sin(p*3)*1.5|0,w,1,40,28,14)}}
+
+// === FOREGROUND TREES (explicit branches, denser top/center leaf clusters) ===
+function drawFgTrees(){
+  const ls=Math.sin(t*.2)*1.5,rs=Math.sin(t*.25+1)*1;
+
+  function drawRoots(cx,bot,w,seed){
+    const R2=sr(seed);
+    for(let i=0;i<3+R2()*3|0;i++){const dir=(R2()-.5)*2,len=w*.4+R2()*w*.6;for(let s=0;s<len;s++){const p=s/len;px(cx+dir*s*.8|0,bot-1+p*3+Math.sin(s*.3+i)|0,2,1,36+R2()*8|0,26+R2()*6|0,12+R2()*4|0)}}
+    for(let i=0;i<8+R2()*6|0;i++){px(cx-w*.3+R2()*w*.6|0,bot+R2()*3|0,1+R2()*2|0,1,20+R2()*10|0,42+R2()*12|0,10+R2()*5|0)}
+  }
+
+  // LEFT EDGE
+  const ltx=cW*-.02,ltw=cW*.06;
+  for(let y=0;y<cH;y++){for(let x=Math.max(0,ltx|0);x<(ltx+ltw)|0;x++){if(x>=cW)continue;const xn=(x-ltx)/ltw,sh=Math.sin(xn*Math.PI);let r=44*(sh*.5+.5)|0,g=30*(sh*.5+.5)|0,b=15*(sh*.5+.5)|0;if(Math.sin(x*.7+y*.1)>.72){r+=5;g+=4;b+=2}if(xn>.3&&xn<.7&&Math.sin(y*.05+x*.07)>.5){r=r*.7+4|0;g=g*.7+14|0;b=b*.7+2|0}px(x,y,1,1,Math.max(4,r),Math.max(4,g),Math.max(2,b))}}
+  drawBranch(ltx+ltw,cH*.08,ltx+ltw+cW*.09,cH*.04,2);drawBranch(ltx+ltw,cH*.18,ltx+ltw+cW*.12,cH*.12,2);drawBranch(ltx+ltw,cH*.32,ltx+ltw+cW*.08,cH*.27,2);drawBranch(ltx+ltw,cH*.52,ltx+ltw+cW*.07,cH*.47,2);drawBranch(ltx+ltw,cH*.68,ltx+ltw+cW*.06,cH*.64,1);
+  drawLeafCluster(ltx+ltw+cW*.09,cH*.02,cW*.06,100,ls);drawLeafCluster(ltx+ltw+cW*.13,cH*.10,cW*.055,110,ls);drawLeafCluster(ltx+ltw+cW*.05,cH*.06,cW*.045,112,ls);drawLeafCluster(ltx+ltw+cW*.08,cH*.25,cW*.045,120,ls);drawLeafCluster(ltx+ltw+cW*.07,cH*.45,cW*.04,130,ls);drawLeafCluster(ltx+ltw+cW*.06,cH*.62,cW*.035,135,ls);drawLeafCluster(ltx+ltw+cW*.02,cH*.01,cW*.045,142,ls);drawLeafCluster(ltx+ltw+cW*.17,cH*.06,cW*.04,144,ls);
+  drawRoots(ltx+ltw*.5,cH*.97,ltw*2,800);
+
+  // RIGHT EDGE
+  const rtx=cW*.95,rtw=cW*.06;
+  for(let y=0;y<cH*.90;y++){for(let x=rtx|0;x<Math.min(cW,(rtx+rtw)|0);x++){const xn=(x-rtx)/rtw,sh=Math.sin(xn*Math.PI);let r=40*(sh*.5+.5)|0,g=27*(sh*.5+.5)|0,b=13*(sh*.5+.5)|0;if(Math.sin(x*.6+y*.09)>.72){r+=4;g+=3;b+=2}px(x,y,1,1,Math.max(3,r),Math.max(3,g),Math.max(2,b))}}
+  drawBranch(rtx,cH*.06,rtx-cW*.09,cH*.02,2);drawBranch(rtx,cH*.16,rtx-cW*.11,cH*.10,2);drawBranch(rtx,cH*.30,rtx-cW*.08,cH*.25,2);drawBranch(rtx,cH*.50,rtx-cW*.07,cH*.45,1);drawBranch(rtx,cH*.66,rtx-cW*.06,cH*.62,1);
+  drawLeafCluster(rtx-cW*.09,cH*.01,cW*.055,200,rs);drawLeafCluster(rtx-cW*.12,cH*.08,cW*.05,210,rs);drawLeafCluster(rtx-cW*.05,cH*.04,cW*.04,212,rs);drawLeafCluster(rtx-cW*.08,cH*.23,cW*.04,220,rs);drawLeafCluster(rtx-cW*.07,cH*.43,cW*.035,225,rs);drawLeafCluster(rtx-cW*.06,cH*.60,cW*.035,228,rs);drawLeafCluster(rtx-cW*.04,cH*.04,cW*.04,232,rs);
+  drawRoots(rtx+rtw*.3,cH*.89,rtw*2,810);
+
+  // NEAR-LEFT TALL (leans right) — trunk stops inside canopy
+  const t1x=cW*.18,t1w=cW*.03,t1bot=cH*.72,t1top=cH*.08,t1lean=cW*.015;
+  const t1trunkStop=t1top+cH*.06; // trunk stops well inside the leaf canopy
+  for(let y=t1trunkStop|0;y<t1bot|0;y++){const lO=t1lean*(t1bot-y)/(t1bot-t1top);for(let x=t1x+lO|0;x<(t1x+t1w+lO)|0;x++){const xn=(x-t1x-lO)/t1w,sh=Math.sin(xn*Math.PI);px(x,y,1,1,(40*(sh*.5+.5))|0,(28*(sh*.5+.5))|0,(13*(sh*.5+.5))|0)}}
+  const t1s=Math.sin(t*.3+2)*.7;
+  drawBranch(t1x+t1w,t1trunkStop+2,t1x+t1w+cW*.06,t1top+cH*.02,1);drawBranch(t1x,t1trunkStop+4,t1x-cW*.05,t1top+cH*.02,1);drawBranch(t1x+t1w,cH*.22,t1x+t1w+cW*.05,cH*.18,1);drawBranch(t1x+t1w,cH*.38,t1x+t1w+cW*.04,cH*.34,1);drawBranch(t1x,cH*.50,t1x-cW*.04,cH*.46,1);drawBranch(t1x+t1w,cH*.62,t1x+t1w+cW*.03,cH*.59,1);
+  // Dense canopy wrapping around trunk top
+  drawLeafCluster(t1x+t1w*.5+t1lean,t1top-cH*.03,cW*.06,300,t1s);drawLeafCluster(t1x+t1w+cW*.04+t1lean,t1top+cH*.01,cW*.04,305,t1s);drawLeafCluster(t1x-cW*.03+t1lean,t1top+cH*.02,cW*.035,310,t1s);drawLeafCluster(t1x+t1w*.5+t1lean,t1top+cH*.04,cW*.04,311,t1s);drawLeafCluster(t1x+t1w*.5+t1lean*.7,t1top+cH*.08,cW*.035,312,t1s);drawLeafCluster(t1x+t1w+cW*.05,cH*.16,cW*.03,315,t1s);drawLeafCluster(t1x+t1w+cW*.04,cH*.32,cW*.03,317,t1s);drawLeafCluster(t1x-cW*.03,cH*.44,cW*.025,319,t1s);drawLeafCluster(t1x+t1w+cW*.03,cH*.57,cW*.025,321,t1s);
+  drawRoots(t1x+t1w*.5,t1bot,t1w*3,820);
+
+  // NEAR-RIGHT TALL (leans left) — trunk stops inside canopy
+  const t2x=cW*.78,t2w=cW*.03,t2bot=cH*.70,t2top=cH*.10,t2lean=-cW*.012;
+  const t2trunkStop=t2top+cH*.06;
+  for(let y=t2trunkStop|0;y<t2bot|0;y++){const lO=t2lean*(t2bot-y)/(t2bot-t2top);for(let x=t2x+lO|0;x<(t2x+t2w+lO)|0;x++){const xn=(x-t2x-lO)/t2w,sh=Math.sin(xn*Math.PI);px(x,y,1,1,(38*(sh*.5+.5))|0,(26*(sh*.5+.5))|0,(12*(sh*.5+.5))|0)}}
+  const t2s=Math.sin(t*.28+3)*.6;
+  drawBranch(t2x,t2trunkStop+2,t2x-cW*.06,t2top+cH*.02,1);drawBranch(t2x+t2w,t2trunkStop+4,t2x+t2w+cW*.04,t2top+cH*.02,1);drawBranch(t2x,cH*.24,t2x-cW*.05,cH*.20,1);drawBranch(t2x,cH*.38,t2x-cW*.04,cH*.34,1);drawBranch(t2x+t2w,cH*.50,t2x+t2w+cW*.03,cH*.47,1);drawBranch(t2x,cH*.60,t2x-cW*.03,cH*.57,1);
+  drawLeafCluster(t2x+t2w*.5+t2lean,t2top-cH*.03,cW*.055,400,t2s);drawLeafCluster(t2x-cW*.04+t2lean,t2top+cH*.01,cW*.035,405,t2s);drawLeafCluster(t2x+t2w+cW*.03+t2lean,t2top+cH*.02,cW*.03,410,t2s);drawLeafCluster(t2x+t2w*.5+t2lean,t2top+cH*.04,cW*.035,411,t2s);drawLeafCluster(t2x+t2w*.5+t2lean*.7,t2top+cH*.08,cW*.03,412,t2s);drawLeafCluster(t2x-cW*.05,cH*.18,cW*.03,415,t2s);drawLeafCluster(t2x-cW*.04,cH*.32,cW*.025,417,t2s);drawLeafCluster(t2x+t2w+cW*.03,cH*.45,cW*.025,419,t2s);drawLeafCluster(t2x-cW*.03,cH*.56,cW*.02,421,t2s);
+  drawRoots(t2x+t2w*.5,t2bot,t2w*3,830);
+
+  // INNER-LEFT (leans left) — trunk hidden by canopy
+  const t3x=cW*.28,t3w=cW*.022,t3bot=cH*.68,t3top=cH*.14,t3lean=-cW*.008;
+  const t3ts=t3top+cH*.05;
+  for(let y=t3ts|0;y<t3bot|0;y++){const lO=t3lean*(t3bot-y)/(t3bot-t3top);for(let x=t3x+lO|0;x<(t3x+t3w+lO)|0;x++){const xn=(x-t3x-lO)/t3w,sh=Math.sin(xn*Math.PI);px(x,y,1,1,(36*(sh*.5+.5))|0,(24*(sh*.5+.5))|0,(11*(sh*.5+.5))|0)}}
+  const t3s=Math.sin(t*.32+5)*.5;
+  drawBranch(t3x+t3w,t3ts+2,t3x+t3w+cW*.05,t3top+cH*.01,1);drawBranch(t3x,t3ts+4,t3x-cW*.03,t3top+cH*.02,1);drawBranch(t3x+t3w,cH*.28,t3x+t3w+cW*.03,cH*.25,1);drawBranch(t3x,cH*.42,t3x-cW*.03,cH*.39,1);drawBranch(t3x+t3w,cH*.56,t3x+t3w+cW*.03,cH*.53,1);
+  drawLeafCluster(t3x+t3w*.5+t3lean,t3top-cH*.02,cW*.045,500,t3s);drawLeafCluster(t3x+t3w+cW*.04+t3lean,t3top+cH*.02,cW*.03,505,t3s);drawLeafCluster(t3x-cW*.02+t3lean,t3top+cH*.02,cW*.03,510,t3s);drawLeafCluster(t3x+t3w*.5+t3lean,t3top+cH*.06,cW*.025,512,t3s);drawLeafCluster(t3x+t3w+cW*.03,cH*.23,cW*.02,515,t3s);drawLeafCluster(t3x-cW*.02,cH*.37,cW*.02,517,t3s);drawLeafCluster(t3x+t3w+cW*.03,cH*.51,cW*.02,519,t3s);
+  drawRoots(t3x+t3w*.5,t3bot,t3w*2.5,840);
+
+  // INNER-RIGHT (leans right) — trunk hidden by canopy
+  const t4x=cW*.66,t4w=cW*.022,t4bot=cH*.66,t4top=cH*.15,t4lean=cW*.01;
+  const t4ts=t4top+cH*.05;
+  for(let y=t4ts|0;y<t4bot|0;y++){const lO=t4lean*(t4bot-y)/(t4bot-t4top);for(let x=t4x+lO|0;x<(t4x+t4w+lO)|0;x++){const xn=(x-t4x-lO)/t4w,sh=Math.sin(xn*Math.PI);px(x,y,1,1,(34*(sh*.5+.5))|0,(22*(sh*.5+.5))|0,(10*(sh*.5+.5))|0)}}
+  const t4s=Math.sin(t*.3+6)*.5;
+  drawBranch(t4x,t4ts+2,t4x-cW*.04,t4top+cH*.01,1);drawBranch(t4x+t4w,t4ts+4,t4x+t4w+cW*.03,t4top+cH*.02,1);drawBranch(t4x,cH*.26,t4x-cW*.03,cH*.23,1);drawBranch(t4x+t4w,cH*.40,t4x+t4w+cW*.03,cH*.37,1);drawBranch(t4x,cH*.54,t4x-cW*.02,cH*.51,1);
+  drawLeafCluster(t4x+t4w*.5+t4lean,t4top-cH*.02,cW*.045,600,t4s);drawLeafCluster(t4x-cW*.03+t4lean,t4top+cH*.02,cW*.03,605,t4s);drawLeafCluster(t4x+t4w+cW*.03+t4lean,t4top+cH*.02,cW*.025,610,t4s);drawLeafCluster(t4x+t4w*.5+t4lean,t4top+cH*.06,cW*.025,612,t4s);drawLeafCluster(t4x-cW*.03,cH*.21,cW*.02,615,t4s);drawLeafCluster(t4x+t4w+cW*.03,cH*.35,cW*.02,617,t4s);drawLeafCluster(t4x-cW*.02,cH*.50,cW*.02,619,t4s);
+  drawRoots(t4x+t4w*.5,t4bot,t4w*2.5,850);
+
+  // CENTER-LEFT — trunk hidden by canopy
+  const t5x=cW*.11,t5w=cW*.02,t5bot=cH*.65,t5top=cH*.18,t5lean=cW*.008;
+  const t5ts=t5top+cH*.05;
+  for(let y=t5ts|0;y<t5bot|0;y++){const lO=t5lean*(t5bot-y)/(t5bot-t5top);for(let x=t5x+lO|0;x<(t5x+t5w+lO)|0;x++){const xn=(x-t5x-lO)/t5w,sh=Math.sin(xn*Math.PI);px(x,y,1,1,(35*(sh*.5+.5))|0,(23*(sh*.5+.5))|0,(11*(sh*.5+.5))|0)}}
+  const t5s=Math.sin(t*.26+7)*.6;
+  drawBranch(t5x+t5w,t5ts+2,t5x+t5w+cW*.04,t5top+cH*.01,1);drawBranch(t5x,t5ts+4,t5x-cW*.03,t5top+cH*.02,1);drawBranch(t5x+t5w,cH*.30,t5x+t5w+cW*.03,cH*.27,1);drawBranch(t5x,cH*.44,t5x-cW*.03,cH*.41,1);drawBranch(t5x+t5w,cH*.55,t5x+t5w+cW*.02,cH*.52,1);
+  drawLeafCluster(t5x+t5w*.5+t5lean,t5top-cH*.02,cW*.04,700,t5s);drawLeafCluster(t5x+t5w+cW*.03+t5lean,t5top+cH*.02,cW*.03,705,t5s);drawLeafCluster(t5x-cW*.02+t5lean,t5top+cH*.02,cW*.025,710,t5s);drawLeafCluster(t5x+t5w*.5+t5lean,t5top+cH*.06,cW*.02,712,t5s);drawLeafCluster(t5x+t5w+cW*.03,cH*.25,cW*.02,715,t5s);drawLeafCluster(t5x-cW*.02,cH*.39,cW*.02,717,t5s);drawLeafCluster(t5x+t5w+cW*.02,cH*.50,cW*.018,719,t5s);
+  drawRoots(t5x+t5w*.5,t5bot,t5w*2.5,860);
+
+  // SHORT BOTTOM-RIGHT — trunk hidden by canopy
+  const t6x=cW*.85,t6w=cW*.025,t6bot=cH*.82,t6top=cH*.42,t6lean=-cW*.006;
+  const t6ts=t6top+cH*.05;
+  for(let y=t6ts|0;y<t6bot|0;y++){const lO=t6lean*(t6bot-y)/(t6bot-t6top);for(let x=t6x+lO|0;x<(t6x+t6w+lO)|0;x++){const xn=(x-t6x-lO)/t6w,sh=Math.sin(xn*Math.PI);px(x,y,1,1,(36*(sh*.5+.5))|0,(25*(sh*.5+.5))|0,(11*(sh*.5+.5))|0)}}
+  const t6s=Math.sin(t*.22+8)*.4;
+  drawBranch(t6x,t6ts+2,t6x-cW*.04,t6top+cH*.01,1);drawBranch(t6x+t6w,t6ts+4,t6x+t6w+cW*.03,t6top+cH*.02,1);drawBranch(t6x,cH*.52,t6x-cW*.03,cH*.49,1);drawBranch(t6x+t6w,cH*.64,t6x+t6w+cW*.03,cH*.61,1);drawBranch(t6x,cH*.74,t6x-cW*.02,cH*.72,1);
+  drawLeafCluster(t6x+t6w*.5+t6lean,t6top-cH*.02,cW*.04,750,t6s);drawLeafCluster(t6x-cW*.03+t6lean,t6top+cH*.02,cW*.025,755,t6s);drawLeafCluster(t6x+t6w+cW*.03+t6lean,t6top+cH*.02,cW*.02,758,t6s);drawLeafCluster(t6x+t6w*.5+t6lean,t6top+cH*.06,cW*.02,760,t6s);drawLeafCluster(t6x-cW*.03,cH*.48,cW*.02,762,t6s);drawLeafCluster(t6x+t6w+cW*.03,cH*.59,cW*.02,764,t6s);drawLeafCluster(t6x-cW*.02,cH*.70,cW*.018,766,t6s);
+  drawRoots(t6x+t6w*.5,t6bot,t6w*2.5,870);
+}
+
+// === LARGE BOTTOM BUSHES — organic, natural shape growing from screen bottom ===
+function drawExtraBushes(){
+  [{x:cW*.10,w:140,h:50,seed:770},{x:cW*.88,w:169,h:60,seed:789}].forEach((b,i)=>{
+    const R2=sr(b.seed);
+    const profile=[];
+    for(let dx=-b.w/2|0;dx<=b.w/2|0;dx++){
+      const nx=dx/(b.w/2);
+      const h1=Math.max(0,1-nx*nx)*b.h*.6;
+      const h2=Math.max(0,1-(nx-.3)*(nx-.3)*4)*b.h*.35;
+      const h3=Math.max(0,1-(nx+.25)*(nx+.25)*5)*b.h*.3;
+      const h4=Math.max(0,1-(nx+.5)*(nx+.5)*8)*b.h*.2;
+      profile.push(Math.max(h1,h2,h3,h4)+b.h*.35);
+    }
+    for(let dx=-b.w/2|0;dx<=b.w/2|0;dx++){
+      const colH=profile[dx+(b.w/2|0)]|0;
+      for(let dy=0;dy<colH;dy++){
+        const lx=b.x+dx,ly=cH-1-dy;
+        if(ly<0)continue;
+        const topDist=dy/colH;
+        if(topDist>.88){const n=((Math.sin(lx*.37+ly*.29)*43758.5)%1+1)%1;if(n<.4)continue}
+        const n1=((Math.sin(lx*.13+ly*.17+i*3.7)*43758.5453)%1+1)%1;
+        const n2=((Math.sin(lx*.21-ly*.11+i*7.3)*28461.3)%1+1)%1;
+        const v=n1*.6+n2*.4;
+        if(v<.08)continue;
+        // Dark green-purple palette
+        let g;if(v<.25)g=14;else if(v<.45)g=20;else if(v<.65)g=28;else if(v<.82)g=34;else g=38;
+        const yBright=.65+topDist*.35;
+        if(n1>.85)g=Math.min(42,g+5);
+        g=g*yBright|0;
+        px(lx|0,ly,1,1,g*.28+4|0,g,g*.12+6|0);
+      }
+    }
+    for(let j=0;j<12;j++){const bx=b.x-b.w*.35+R2()*b.w*.7,bby=cH-1-b.h*.3-R2()*b.h*.4|0;px(bx|0,bby,2,2,148,20,24)}
+  });
+}
+
+// === SIDE BUSHES (organic shapes, static, darker green) ===
+function drawFgBushes(){
+  const top=cH*RIVER_BOT|0;
+  [{x:cW*.04,o:8,w:90,h:44},{x:cW*.92,o:6,w:80,h:40},
+   {x:cW*.07,o:24,w:65,h:35},{x:cW*.89,o:22,w:70,h:36},
+   {x:cW*.02,o:16,w:55,h:30},{x:cW*.94,o:18,w:60,h:32}].forEach((b,i)=>{
+    const byBase=top+b.o+b.h;if(byBase>cH+10)return;
+    const R2=sr(700+i*17);
+    for(let dx=-b.w/2|0;dx<=b.w/2|0;dx++){
+      const nx=dx/(b.w/2);
+      const h1=Math.max(0,1-nx*nx)*b.h*.7;
+      const h2=Math.max(0,1-(nx-.35)*(nx-.35)*6)*b.h*.4;
+      const h3=Math.max(0,1-(nx+.3)*(nx+.3)*5)*b.h*.35;
+      const colH=Math.max(h1,h2,h3)+b.h*.25|0;
+      for(let dy=0;dy<colH;dy++){
+        const lx=b.x+dx,ly=byBase-dy;if(ly<0||ly>=cH)continue;
+        const topP=dy/colH;
+        if(topP>.88){const n=((Math.sin(lx*.37+ly*.29)*43758.5)%1+1)%1;if(n<.35)continue}
+        const n1=((Math.sin(lx*.13+ly*.17+i*4.1)*43758.5453)%1+1)%1;
+        const n2=((Math.sin(lx*.21-ly*.11+i*6.7)*28461.3)%1+1)%1;
+        const v=n1*.6+n2*.4;
+        if(v<.08)continue;
+        let g;if(v<.25)g=14;else if(v<.45)g=20;else if(v<.65)g=28;else if(v<.82)g=34;else g=38;
+        if(n1>.85)g=Math.min(42,g+5);
+        g=g*(.65+topP*.35)|0;
+        px(lx|0,ly,1,1,g*.28+4|0,g,g*.12+6|0);
+      }
+    }
+    for(let j=0;j<6+b.w/15|0;j++){const bx=b.x-b.w*.3+R2()*b.w*.6,bby=byBase-b.h*.2-R2()*b.h*.6;px(bx|0,bby|0,2,2,148,20,24)}
+  });
+}
+
+// === MUSHROOMS (3 mid-foreground on grass + 2 bottom + 1 small near river) ===
+function drawNearMushrooms(){[{x:cW*.35,y:cH*.73,s:1.5},{x:cW*.62,y:cH*.75,s:1.4},{x:cW*.74,y:cH*.72,s:1.3},{x:cW*.22,y:cH*.86,s:1.6},{x:cW*.72,y:cH*.86,s:1.5},{x:cW*.155,y:cH*.585,s:1.0}].forEach((m,i)=>{if(onBridge(m.x,m.y))return;const bob=Math.sin(t*.8+i*2.5)*.3,s=m.s;
+  px(m.x,m.y-3*s+bob|0,2*s|0,3*s|0,195,188,170);
+  px(m.x-3*s|0,m.y-4*s+bob|0,7*s|0,2*s|0,162,24,18);
+  px(m.x-2*s|0,m.y-5.5*s+bob|0,5*s|0,1.5*s|0,185,32,24);
+  px(m.x-s|0,m.y-6.5*s+bob|0,3*s|0,s|0,195,38,30);
+  px(m.x-s|0,m.y-5.5*s+bob|0,s|0,s|0,232,225,215);
+  px(m.x+2*s|0,m.y-4*s+bob|0,s|0,s|0,232,225,215);
+})}
+// === RABBIT ===
+function drawRabbitGuard(){const rx=cW*.44,ry=cH*.78,hop=Math.sin(t*1.2)*.5,br=Math.sin(t*1.8)*.2,s=1.6;px((rx-3*s)|0,(ry+s)|0,10*s|0,1,6,18,6,.1);px((rx-2*s)|0,(ry-s+hop)|0,2*s|0,2*s|0,198,192,182);px((rx+2*s)|0,(ry-s+hop)|0,2*s|0,2*s|0,198,192,182);px((rx-3.5*s)|0,(ry-8*s+hop+br)|0,9*s|0,8*s|0,212,206,196);px((rx-2.5*s)|0,(ry-7*s+hop+br)|0,7*s|0,6*s|0,220,214,204);px((rx-2*s)|0,(ry-4*s+hop+br)|0,5*s|0,2*s|0,230,226,218);px((rx-4*s)|0,(ry-5*s+hop+br)|0,1.5*s|0,3*s|0,208,202,192);px((rx+4*s)|0,(ry-5*s+hop+br)|0,1.5*s|0,3*s|0,208,202,192);px((rx-3*s)|0,(ry-14*s+hop)|0,8*s|0,6*s|0,220,214,204);px((rx-2*s)|0,(ry-13*s+hop)|0,6*s|0,5*s|0,226,220,210);px((rx-2*s)|0,(ry-22*s+hop)|0,2*s|0,8*s|0,216,208,198);px((rx+2*s)|0,(ry-22*s+hop)|0,2*s|0,8*s|0,216,208,198);px((rx-2*s)|0,(ry-20*s+hop)|0,2*s|0,5*s|0,192,154,150);px((rx+2*s)|0,(ry-20*s+hop)|0,2*s|0,5*s|0,192,154,150);px((rx-1.5*s)|0,(ry-13*s+hop)|0,1.5*s|0,1.5*s|0,8,4,2);px((rx+1.5*s)|0,(ry-13*s+hop)|0,1.5*s|0,1.5*s|0,8,4,2);px((rx-1*s)|0,(ry-13*s+hop)|0,s*.7|0,s*.7|0,255,255,255,.45);px((rx+2*s)|0,(ry-13*s+hop)|0,s*.7|0,s*.7|0,255,255,255,.45);px((rx-.5*s)|0,(ry-11.5*s+hop)|0,1.5*s|0,s|0,180,128,128);px((rx-s)|0,(ry-10.5*s+hop)|0,s|0,s*.5|0,168,118,118);px((rx+.5*s)|0,(ry-10.5*s+hop)|0,s|0,s*.5|0,168,118,118)}
+
+// === BUTTERFLIES (daytime) / FIREFLIES (night) ===
+function drawButterflies(){
+  for(let i=0;i<6;i++){
+    // Fluttery path — bobbing, drifting
+    const bxBase=[.08,.28,.48,.65,.78,.90][i];
+    const bx=cW*bxBase+Math.sin(t*.18+i*2.3)*cW*.04+Math.cos(t*.07+i*1.1)*cW*.02;
+    const byBase=[.35,.43,.51,.32,.59,.67][i];
+    const by=cH*byBase+Math.sin(t*.25+i*1.7)*cH*.06+Math.cos(t*.4+i*2.9)*cH*.02;
+    const wingFlap=Math.sin(t*4+i*2); // fast flapping
+    const wingOpen=Math.abs(wingFlap); // 0=closed, 1=open
+    // Body (tiny dark line)
+    px(bx|0,by|0,1,2,30,20,10);
+    // Wings — orange with black tips, size varies with flap
+    const ws=1+wingOpen*2|0;
+    // Left wing
+    px(bx-ws|0,by-1|0,ws,1,210,120,20);
+    px(bx-ws|0,by|0,ws,1,190,100,15);
+    if(wingOpen>.5) px(bx-ws-1|0,by-1|0,1,1,40,30,20); // black tip
+    // Right wing
+    px(bx+1|0,by-1|0,ws,1,210,120,20);
+    px(bx+1|0,by|0,ws,1,190,100,15);
+    if(wingOpen>.5) px(bx+ws+1|0,by-1|0,1,1,40,30,20); // black tip
+    // White spots on wings when open
+    if(wingOpen>.6){
+      px(bx-ws+1|0,by-1|0,1,1,240,230,210);
+      px(bx+ws|0,by-1|0,1,1,240,230,210);
+    }
+  }
+}
+function drawFireflies(){
+  // Background fireflies (far side of river)
+  for(let i=0;i<4;i++){
+    const fx=cW*(.1+i*.25)+Math.sin(t*.08+i*2.4)*cW*.06;
+    const fy=cH*.26+Math.cos(t*.12+i*1.9)*cH*.04;
+    const b=Math.sin(t*1.2+i*1.4)*.5+.5;
+    if(b>.4){px(fx|0,fy|0,1,1,220,220,100,b*.45);X.fillStyle=`rgba(255,248,60,${b*.025})`;X.fillRect((fx-1|0)*P,(fy-1|0)*P,P*3,P*3)}
+  }
+  // Mid-foreground fireflies
+  for(let i=0;i<8;i++){
+    const baseX=cW*(.06+i*.115);
+    const baseY=cH*(.58+((i*37+13)%20)*.007);
+    const fx=baseX+Math.sin(t*.12+i*2.1)*cW*.04;
+    const fy=baseY+Math.cos(t*.18+i*1.5)*cH*.03;
+    const b=Math.sin(t*1.5+i*1.1)*.5+.5;
+    if(b>.35){px(fx|0,fy|0,1,1,255,255,120,b*.65);X.fillStyle=`rgba(255,248,60,${b*.04})`;X.fillRect((fx-1|0)*P,(fy-1|0)*P,P*3,P*3)}
+  }
+  // Bottom foreground fireflies
+  for(let i=0;i<4;i++){
+    const fx=cW*(.10+i*.25)+Math.sin(t*.09+i*1.9)*cW*.06;
+    const fy=cH*.78+Math.cos(t*.13+i*2.5)*cH*.05;
+    const b=Math.sin(t*1.3+i*1.7)*.5+.5;
+    if(b>.3){px(fx|0,fy|0,1,1,255,252,110,b*.8);X.fillStyle=`rgba(255,248,60,${b*.06})`;X.fillRect((fx-1|0)*P,(fy-1|0)*P,P*3,P*3)}
+  }
+}
+function drawCreatures(){if(hour>=8&&hour<18)drawButterflies();else drawFireflies()}
+
+// === STARS (night only) ===
+function drawStars(){
+  const R=sr(9999);
+  for(let i=0;i<30;i++){
+    const sx=R()*cW|0,sy=R()*cH*.12|0;
+    const twinkle=Math.sin(t*2+i*1.7)*.3+.7;
+    const bright=(.4+R()*.6)*twinkle;
+    px(sx,sy,1,1,200,200,220,bright);
+  }
+}
+
+function draw(){t+=.016;X.clearRect(0,0,W,H);drawSky();if(hour>=22||hour<6)drawStars();drawHawk();drawFarField();drawDistantTrees();drawFarBankTrees();drawRiver();drawNearGround();drawBridge();drawGrass();drawFgBushes();drawFgTrees();drawRabbitGuard();drawExtraBushes();drawNearMushrooms();drawCreatures();requestAnimationFrame(draw)}
+draw();
+
+const _k='1f514792506f1b678c12bef7bfc1804c95c149191be245507187ad42e47bc107',pi=document.getElementById('passInput'),sb=document.getElementById('submitBtn'),em=document.getElementById('errorMsg'),ss=document.getElementById('success-screen');
+async function _h(s){const b=new TextEncoder().encode(s);const h=await crypto.subtle.digest('SHA-256',b);return Array.from(new Uint8Array(h)).map(x=>x.toString(16).padStart(2,'0')).join('')}
+async function chk(){const v=pi.value.trim();if(!v){em.textContent='Say something!';em.className='error-msg';void em.offsetHeight;em.className='error-msg shake';return}const hv=await _h(v);if(hv===_k){document.getElementById('password-bubble').style.display='none';ss.classList.add('show')}else{em.textContent="Hmm... not quite.";em.className='error-msg';void em.offsetHeight;em.className='error-msg shake';pi.value='';pi.focus()}}
+sb.addEventListener('click',chk);pi.addEventListener('keydown',e=>{if(e.key==='Enter')chk()});
+</script>
+</body>
+</html>
