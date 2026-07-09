@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Prospectus Quotes Quiz</title>
+<style>
+  :root{
+    --paper:#F7F5EE;
+    --paper-edge:#ECE8DC;
+    --ink:#16181D;
+    --ink-soft:#4A4C52;
+    --accent:#A8231B;
+    --ledger:#1E3A5F;
+    --highlight:#FFE873;
+    --rule:#C9C3B2;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    background:var(--paper-edge);
+    color:var(--ink);
+    font-family:"Times New Roman", Times, Georgia, serif;
+    line-height:1.55;
+    min-height:100vh;
+    padding:24px 12px 64px;
+  }
+  .page{
+    max-width:720px;
+    margin:0 auto;
+    background:var(--paper);
+    border:1px solid var(--rule);
+    box-shadow:0 1px 0 rgba(0,0,0,.06), 0 12px 32px rgba(30,30,20,.10);
+    padding:40px 44px 48px;
+  }
+  @media (max-width:560px){
+    body{padding:8px 4px 40px}
+    .page{padding:26px 18px 34px}
+  }
+  .mono{font-family:"Courier New", Courier, monospace}
+  /* ---------- Cover ---------- */
+  h1.doc-title{
+    text-align:center;
+    font-size:34px;
+    line-height:1.15;
+    margin:40px 0 12px;
+    font-weight:700;
+  }
+  .doc-subtitle{
+    text-align:center;
+    font-style:italic;
+    color:var(--ink-soft);
+    font-size:17px;
+    margin-bottom:40px;
+  }
+  /* ---------- Buttons ---------- */
+  .btn{
+    display:inline-block;
+    font-family:"Courier New", Courier, monospace;
+    font-size:14px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    background:var(--ink);
+    color:var(--paper);
+    border:none;
+    padding:13px 26px;
+    cursor:pointer;
+  }
+  .btn:hover{background:var(--ledger)}
+  .btn:focus-visible{outline:3px solid var(--ledger);outline-offset:2px}
+  .btn-row{text-align:center;margin-top:8px;margin-bottom:24px}
+  /* ---------- Question ---------- */
+  .quiz-header{
+    font-family:"Courier New", Courier, monospace;
+    font-size:12px;
+    letter-spacing:.08em;
+    color:var(--ink-soft);
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    border-bottom:2px solid var(--ink);
+    padding-bottom:8px;
+    margin-bottom:28px;
+    text-transform:uppercase;
+    flex-wrap:wrap;
+  }
+  blockquote.quote{
+    font-size:18px;
+    line-height:1.6;
+    font-style:italic;
+    border-left:3px solid var(--ink);
+    padding:4px 0 4px 20px;
+    margin:0 0 26px;
+  }
+  blockquote.quote p{margin-bottom:12px}
+  blockquote.quote p:last-child{margin-bottom:0}
+  @media (max-width:560px){ blockquote.quote{font-size:16px} }
+  .redacted{
+    background:var(--ink);
+    color:var(--ink);
+    padding:0 6px;
+    border-radius:1px;
+    user-select:none;
+    white-space:nowrap;
+    transition:background .5s ease, color .5s ease;
+  }
+  .redacted.lifted{
+    background:var(--highlight);
+    color:var(--ink);
+    font-style:normal;
+    font-weight:700;
+    user-select:text;
+  }
+  .redacted.labeled{
+    color:var(--paper);
+    font-style:normal;
+    font-family:"Courier New", Courier, monospace;
+    font-size:11px;
+    letter-spacing:.08em;
+    padding:2px 8px;
+    vertical-align:1px;
+  }
+  .redacted.labeled.lifted{
+    color:var(--ink);
+    font-family:inherit;
+    font-size:inherit;
+    letter-spacing:normal;
+    vertical-align:baseline;
+  }
+  @media (prefers-reduced-motion: reduce){
+    .redacted{transition:none}
+  }
+  .options{list-style:none}
+  .options li{margin-bottom:10px}
+  .opt{
+    width:100%;
+    text-align:left;
+    font-family:"Courier New", Courier, monospace;
+    font-size:14px;
+    background:transparent;
+    border:1px solid var(--ink);
+    color:var(--ink);
+    padding:12px 14px;
+    cursor:pointer;
+    line-height:1.4;
+  }
+  .opt:hover{background:#EFEBDD}
+  .opt:focus-visible{outline:3px solid var(--ledger);outline-offset:2px}
+  .opt .tick{display:inline-block;width:2.2em}
+  .opt.correct{background:var(--highlight);border-color:var(--ink);font-weight:700}
+  .opt.wrong{background:#E9D5D2;border-color:var(--accent);color:var(--accent)}
+  .opt:disabled{cursor:default}
+  /* verdict */
+  .verdict{
+    margin-top:22px;
+    border-top:1px dotted var(--rule);
+    padding-top:16px;
+    display:none;
+  }
+  .verdict.show{display:block}
+  .verdict .ruling{
+    font-family:"Courier New", Courier, monospace;
+    font-size:13px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    margin-bottom:8px;
+  }
+  .verdict .ruling.good{color:#1F6B3A}
+  .verdict .ruling.bad{color:var(--accent)}
+  .verdict .source{
+    font-family:"Courier New", Courier, monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    letter-spacing:.04em;
+  }
+  /* ---------- Results ---------- */
+  .result-score{
+    text-align:center;
+    font-size:56px;
+    font-weight:700;
+    margin:38px 0 2px;
+  }
+  .result-denom{
+    text-align:center;
+    font-family:"Courier New", Courier, monospace;
+    font-size:12px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    margin-bottom:34px;
+  }
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<main class="page" id="app">
+
+  <!-- ============ COVER ============ -->
+  <section id="cover">
+    <h1 class="doc-title">Prospectus Quotes Quiz</h1>
+    <p class="doc-subtitle">These are all real quotes from SEC filings.</p>
+    <div class="btn-row">
+      <button class="btn" id="begin">Begin Quiz</button>
+    </div>
+  </section>
+
+  <!-- ============ QUESTION ============ -->
+  <section id="question" class="hidden">
+    <div class="quiz-header mono">
+      <span id="q-item">Question 1 of 23</span>
+      <span id="q-score">Score: 0</span>
+    </div>
+
+    <blockquote class="quote" id="q-quote"></blockquote>
+
+    <ul class="options" id="q-options"></ul>
+
+    <div class="verdict" id="q-verdict">
+      <p class="ruling" id="q-ruling"></p>
+      <p class="source" id="q-source"></p>
+      <div class="btn-row" style="text-align:left;margin-top:16px;margin-bottom:0">
+        <button class="btn" id="q-next">Next Question &rarr;</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RESULTS ============ -->
+  <section id="results" class="hidden">
+    <p class="result-score" id="r-score">0</p>
+    <p class="result-denom" id="r-denom">of 23 correct</p>
+    <div class="btn-row">
+      <button class="btn" id="r-copy">Copy My Result</button>
+      <button class="btn" id="r-again" style="margin-left:8px">Play Again</button>
+    </div>
+  </section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+
+/* Redaction placeholders:
+   R  = company name (plain bar)
+   RC = company name (labeled bar)
+   RN = CEO's name (labeled bar)
+   RW = redacted word "X" (labeled bar; same word wherever it appears) */
+const R  = '<span class="redacted" data-r>████████</span>';
+const RC = '<span class="redacted labeled" data-r>COMPANY</span>';
+const RN = '<span class="redacted labeled" data-rn>CEO&rsquo;S NAME</span>';
+const RW = '<span class="redacted labeled" data-rw>WORD&nbsp;X</span>';
+
+const QUESTIONS = [
+
+{quote:`<p>&ldquo;Our purpose is to improve quality of our customers&rsquo; lives through the gracious gift of organization&hellip; Our goal is to provide order to an increasingly busy and chaotic world.&rdquo;</p>`,
+ options:["monday.com","The Container Store","Target","Clorox"],answer:1,
+ company:"The Container Store",source:"The Container Store — Form S-1, 2013"},
+
+{quote:`<p>&ldquo;These core values attract passionate and motivated employees who are driven to succeed and share our vision of &lsquo;elevating the world from mediocrity to greatness.&rsquo;&rdquo;</p>`,
+ options:["Salesforce","Peloton","Lululemon","WeWork"],answer:2,
+ company:"Lululemon",source:"Lululemon — Form S-1, 2007"},
+
+{quote:`<p>&ldquo;On the most basic level, ${R} sells happiness.&rdquo;</p>`,
+ options:["The Walt Disney Company","Krispy Kreme","Zoom","Peloton"],answer:3,
+ company:"Peloton",source:"Peloton — Form S-1, 2019"},
+
+{quote:`<p>&ldquo;We are serving a primal need of all human beings&hellip; We see ourselves as the oldest start-up on earth.&rdquo;</p>`,
+ options:["Levi Strauss &amp; Co.","IBM","Birkenstock","The Coca-Cola Company"],answer:2,
+ company:"Birkenstock",source:"Birkenstock — Form F-1, 2023"},
+
+{quote:`<p>&ldquo;We are committed to helping this growing, global community of professionals, whom we refer to as Awesome Humans, look, feel and perform at their best&mdash;24/7, 365 days a year.&rdquo;</p>`,
+ options:["FIGS","LinkedIn","Lululemon","Hims &amp; Hers"],answer:0,
+ company:"FIGS",source:"FIGS — Form S-1, 2021"},
+
+{quote:`<p>&ldquo;We are a community company committed to maximum global impact. Our mission is to elevate the world&rsquo;s consciousness.&rdquo;</p>`,
+ options:["Headspace","Palantir","Peloton","WeWork"],answer:3,
+ company:"WeWork",source:"WeWork — Form S-1, 2019"},
+
+{quote:`<p>&ldquo;Our mission is to help humanity thrive by enabling the world&rsquo;s teams to work together effortlessly.&rdquo;</p>`,
+ options:["Microsoft","Asana","T-Mobile","Accenture"],answer:1,
+ company:"Asana",source:"Asana — Form S-1, 2020"},
+
+{quote:`<p>&ldquo;${R} is a mission-driven, lifestyle brand that operates at the intersection of design, technology, healthcare, and social enterprise.&rdquo;</p>`,
+ options:["Apple","Hims &amp; Hers","Warby Parker","Fitbit"],answer:2,
+ company:"Warby Parker",source:"Warby Parker — Form S-1, 2021"},
+
+{quote:`<p>&ldquo;We call this emerging category &lsquo;human co-experience,&rsquo; which we consider to be the new form of social interaction we envisioned back in 2004.&rdquo;</p>`,
+ options:["Meta","Zoom","Match Group","Roblox"],answer:3,
+ company:"Roblox",source:"Roblox — Form S-1, 2021"},
+
+{quote:`<p>&ldquo;Our culture of delivering happiness drives our mission, vision and values and is fundamental to everything we do at ${R}.&rdquo;</p>`,
+ options:["Zappos","Zoom","Peloton","Southwest Airlines"],answer:1,
+ company:"Zoom",source:"Zoom — Form S-1, 2019"},
+
+{quote:`<p>&ldquo;Our success is based on our outsider approach. We are a technology company seeking to reinvent every aspect of a massive industry.&rdquo;</p>`,
+ options:["Palantir","Oddity","Carvana","Compass"],answer:1,
+ company:"Oddity",source:"Oddity Tech — Form F-1, 2023"},
+
+{quote:`<p>&ldquo;At ${RC}, we believe that a ${RW} is more than just a ${RW}: it is an opportunity to Inspire People to Shine.&rdquo;</p>
+ <p style="font-style:normal;font-size:14px;color:#4A4C52">Both blanks marked &ldquo;WORD X&rdquo; are the same word.</p>`,
+ options:["Target &mdash; X = &ldquo;trip to the store&rdquo;","Mister Car Wash &mdash; X = &ldquo;car wash&rdquo;","SmileDirectClub &mdash; X = &ldquo;dental visit&rdquo;","Traeger Grills &mdash; X = &ldquo;grill&rdquo;"],answer:1,
+ company:"Mister Car Wash",liftWord:"car wash",
+ source:"Mister Car Wash — Form S-1, 2021"},
+
+{quote:`<p>&ldquo;We believe that transforming the food industry is necessary to face humanity&rsquo;s greatest challenges across climate, environment, health and lifestyle. In parallel, change is rocking the consumer landscape, as the growing concerns for the environment and interest in health and nutrition have started to drive real, scaled behavioral changes around consumer purchase choices. Generation Z and Millennials will become the dominant global generations in the coming years, bringing to the market a new set of values and expectations.&rdquo;</p>`,
+ options:["Beyond Meat","Sweetgreen","Oatly","Instacart"],answer:2,
+ company:"Oatly",source:"Oatly — Form F-1, 2021"},
+
+{quote:`<p>&ldquo;I, ${RN}, see, hear, know and feel that the purpose of my life is to enjoy the journey, to maximize the moment, to be a loving, passionate, inspirational leader that defies the odds, to be a force for God and a force for good, and I hope to meet the man that I am someday when I die, not the man I could have been. I am inspired by our people, our mission and all the work we&rsquo;re doing in communities&mdash;I hope you are too. Welcome aboard, fasten your seatbelt&mdash;we&rsquo;re on a rocket ship and I wouldn&rsquo;t have it any other way.&rdquo;</p>`,
+ options:["Virgin Galactic","Dutch Bros","Southwest Airlines","Salesforce"],answer:1,
+ company:"Dutch Bros",lift:"Travis Boersma",
+ source:"Dutch Bros — Form S-1, 2021 (letter from co-founder Travis Boersma)"},
+
+{quote:`<p>&ldquo;Our vision for the future is ambitious: to build a better food system. We are transforming the way that food is produced, distributed, and consumed. We believe a better food system will benefit not only consumers and stockholders, but also the planet, and we manage our business for the benefit of all three.&rdquo;</p>`,
+ options:["Blue Apron","Instacart","Corteva","Kroger"],answer:0,
+ company:"Blue Apron",source:"Blue Apron — Form S-1, 2017"},
+
+{quote:`<p>&ldquo;As an influential Mexican-American, she&rsquo;s also a driver of the New Mainstream Economy of Latinx business and cultural leaders today.&rdquo;</p>`,
+ options:["Stitch Fix","Bumble","The Honest Company","23andMe"],answer:2,
+ company:"The Honest Company",source:"The Honest Company — Form S-1, 2021 (bio of founder Jessica Alba)"},
+
+{quote:`<p>&ldquo;If the last 10 years were defined by the SaaS cloud, then the next 10 years will be focused on giving people the power to create software that fits their needs. We believe that we are best positioned to be the leaders in this change.&rdquo;</p>`,
+ options:["monday.com","Atlassian","Figma","Snowflake"],answer:0,
+ company:"monday.com",source:"monday.com — Form F-1, 2021"},
+
+{quote:`<p>&ldquo;Think about it: if Einstein were alive today, he&rsquo;d start his day by clearing Groupons and LinkedIn invitations out of his inbox. Then he&rsquo;d get down to work &mdash; and right before his Eureka moment, his phone would buzz with a Slack message. Would we still understand relativity?&rdquo;</p>`,
+ options:["Headspace","RocketLab","AppLovin","Dropbox"],answer:3,
+ company:"Dropbox",source:"Dropbox — Form S-1, 2018"},
+
+{quote:`<p>&ldquo;In fact, when we moved back to the city several years later, I could never find eggs that tasted like the ones my &lsquo;girls&rsquo; had laid. That got me wondering: Is it possible to produce amazing food in an environmentally responsible and humane manner on a commercial scale?&rdquo;</p>`,
+ options:["Cal-Maine Foods","Vital Farms","Chobani","Blue Apron"],answer:1,
+ company:"Vital Farms",source:"Vital Farms — Form S-1, 2020"},
+
+{quote:`<p>&ldquo;${R} is the story of a few dedicated everyday people coming together to create something extraordinary. Together, we have built a transformative force in the food industry that aims to provide good food for all while also improving our communities. We are a new kind of company that operates on a simple fundamental principle that we do well by doing good.&rdquo;</p>`,
+ options:["Cava","DoorDash","Chobani","Sprouts Farmers Market"],answer:2,
+ company:"Chobani",source:"Chobani — Form S-1, 2021 (offering later withdrawn)"},
+
+{quote:`<p>&ldquo;The next 100 years are going to be nuts. Global population is going to peak, and then go down&mdash;possibly forever&mdash;inverting the labor pool. The worst effects of climate change will be felt, and (with enough effort) begin to subside. Automation will wipe out millions of jobs, potentially creating a hyper-concentration of wealth that would exacerbate social tensions around the world. VR and personal VTOL travel will radically alter where we live and work. Miniaturized surveillance and data aggregation will challenge all notions of privacy, while quantum computers wipe out all modern cryptography. The Singularity will (maybe?) occur. We will become a multi-planetary civilization. To repeat, the next 100 years are going to be nuts.&rdquo;</p>
+ <p>&ldquo;These vast climate, social, and technological changes are so daunting, it&rsquo;s tempting to bury our heads and pretend they will only happen to somebody else. But odds are, if you are reading these words, you are going to be alive to witness the most extreme effects of these trends&mdash;and if not, your children certainly will. This stark reality has weighed on me, for a long time. Our world is incredible, mysterious, diverse, and beautiful. But so fragile, and pushed to the brink. I am convinced we can get through this, and leave everything for our kids better than we found it. If enough of us help. ${R} is how we help.&rdquo;</p>`,
+ options:["Palantir","Rivian","Expensify","Coinbase"],answer:2,
+ company:"Expensify",source:"Expensify — Form S-1, 2021"},
+
+{quote:`<p>&ldquo;The challenges that we face, and the crises that we have and will continue to confront, expose the systemic weaknesses of the institutions on which we depend. Our industrial infrastructure and manufacturing supply chains were conceived of and constructed in a different century. Government agencies have faltered in fulfilling their mandates and serving the public. Some institutions will struggle to survive. Others will collapse.&rdquo;</p>`,
+ options:["Expensify","Lockheed Martin","Coinbase","Palantir"],answer:3,
+ company:"Palantir",source:"Palantir — Form S-1, 2020"},
+
+{quote:`<p>&ldquo;We aim to reverse climate change through better business by empowering people to make better, more conscious decisions for themselves as well as the planet.&rdquo;</p>`,
+ options:["Bloom Energy","Tesla","Allbirds","NextEra Energy"],answer:2,
+ company:"Allbirds",source:"Allbirds — Form S-1, 2021"}
+];
+
+/* ---------------- engine ---------------- */
+let idx = 0, score = 0, answered = false;
+const MAX = QUESTIONS.length;
+
+const $ = id => document.getElementById(id);
+const show = id => { ["cover","question","results"].forEach(s => $(s).classList.toggle("hidden", s!==id)); window.scrollTo({top:0}); };
+
+function renderQuestion(){
+  const q = QUESTIONS[idx];
+  answered = false;
+
+  $("q-item").textContent = `Question ${idx+1} of ${MAX}`;
+  $("q-score").textContent = `Score: ${score}`;
+  $("q-quote").innerHTML = q.quote;
+  $("q-verdict").classList.remove("show");
+
+  const list = $("q-options");
+  list.innerHTML = "";
+  const letters = ["A","B","C","D"];
+  q.options.forEach((opt,i)=>{
+    const li = document.createElement("li");
+    const btn = document.createElement("button");
+    btn.className = "opt";
+    btn.innerHTML = `<span class="tick">[${letters[i]}]</span>${opt}`;
+    btn.addEventListener("click", ()=> answerMC(i, btn));
+    li.appendChild(btn);
+    list.appendChild(li);
+  });
+}
+
+function liftRedactions(q){
+  document.querySelectorAll("#q-quote [data-r]").forEach(el=>{
+    el.textContent = q.company;
+    el.classList.add("lifted");
+  });
+  document.querySelectorAll("#q-quote [data-rn]").forEach(el=>{
+    el.textContent = q.lift || q.company;
+    el.classList.add("lifted");
+  });
+  document.querySelectorAll("#q-quote [data-rw]").forEach(el=>{
+    el.textContent = q.liftWord || q.company;
+    el.classList.add("lifted");
+  });
+}
+
+function answerMC(i, btn){
+  if(answered) return; answered = true;
+  const q = QUESTIONS[idx];
+  const correct = i === q.answer;
+
+  document.querySelectorAll(".opt").forEach((b,j)=>{
+    b.disabled = true;
+    if(j === q.answer) b.classList.add("correct");
+  });
+  if(!correct) btn.classList.add("wrong");
+
+  if(correct) score++;
+  liftRedactions(q);
+
+  $("q-score").textContent = `Score: ${score}`;
+  const ruling = $("q-ruling");
+  ruling.textContent = correct ? "Correct." : "Incorrect.";
+  ruling.className = "ruling " + (correct ? "good" : "bad");
+  $("q-source").textContent = q.source;
+  $("q-verdict").classList.add("show");
+  $("q-next").textContent = (idx === MAX-1) ? "See Results →" : "Next Question →";
+  $("q-next").focus();
+}
+
+function renderResults(){
+  $("r-score").textContent = score;
+  $("r-denom").textContent = `of ${MAX} correct`;
+  show("results");
+}
+
+$("begin").addEventListener("click", ()=>{ show("question"); renderQuestion(); });
+$("q-next").addEventListener("click", ()=>{
+  idx++;
+  if(idx >= MAX){ renderResults(); }
+  else { renderQuestion(); }
+});
+$("r-again").addEventListener("click", ()=>{
+  idx = 0; score = 0;
+  show("question"); renderQuestion();
+});
+$("r-copy").addEventListener("click", ()=>{
+  const text = `Prospectus Quotes Quiz — I scored ${score}/${MAX}. Real quotes from real SEC filings.`;
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(text).then(()=>{
+      $("r-copy").textContent = "Copied";
+      setTimeout(()=>$("r-copy").textContent = "Copy My Result", 1600);
+    });
+  }
+});
+
+})();
+</script>
+</body>
+</html>
